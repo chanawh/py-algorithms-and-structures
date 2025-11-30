@@ -83,6 +83,11 @@ Notes for the browser UI:
   growth if a room stays busy for a long time.
 - The long-polling endpoints are served directly by `mini_zoom_chat.py`; they
   do not reuse the TCP socket protocol from `chat_server.py`.
+- You can open as many **clients** as you like against the same port (multiple
+  browser tabs or terminals running `chat_client.py`), but only **one server
+  process** can bind to that port at a time. If you start `mini_zoom_chat.py`
+  twice on `:5000`, the second process will fail with “address already in use”
+  whether you’re local, in VS Code, or in Codespaces.
 
 #### Reusing port 5000 for the web UI
 
