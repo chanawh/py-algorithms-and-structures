@@ -197,6 +197,13 @@ Any equivalent layer-7 load balancer (cloud-managed, ingress controller, or
 reverse proxy) works the same way: it owns the public endpoint, distributes
 incoming requests to your replicas, and Redis keeps each instance in sync.
 
+**Is a load balancer built in?** No. The FastAPI service only exposes HTTP and
+WebSocket endpoints; it does not embed a proxy. When you run a single instance
+locally (e.g., `uvicorn fastapi_chat:app --port 8000`), there is no need for a
+balancer. To scale out, start multiple app instances and place them behind an
+external layer-7 balancer (cloud LB, ingress controller, Nginx/HAProxy/Envoy,
+etc.) that owns the public port and forwards traffic to each replica.
+
 Clients can page through durable history via:
 
 - `GET /api/history?room=<room>&limit=50&before_id=<id>`
