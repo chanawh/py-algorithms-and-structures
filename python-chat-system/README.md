@@ -160,6 +160,13 @@ means any independent app instance (container, process, pod, VM, etc.) running
 `fastapi_chat.py` behind the balancer; Redis keeps them in sync so they can all
 serve the same rooms.
 
+**What “load balancer” means here:** It’s any layer that fronts multiple
+`fastapi_chat.py` instances and fans incoming requests/WebSocket upgrades out to
+them—e.g., an AWS ALB/NLB, Kubernetes Service/Ingress, Nginx/HAProxy/Envoy, or a
+PaaS router. The balancer handles health checks and typically round-robins
+requests, while Redis keeps every replica’s room stream consistent so users see
+the same chat regardless of which instance they hit.
+
 Clients can page through durable history via:
 
 - `GET /api/history?room=<room>&limit=50&before_id=<id>`
