@@ -155,7 +155,10 @@ uvicorn fastapi_chat:app --host 0.0.0.0 --port 8000
 ```
 
 Use the same Redis URL in all replicas (set `REDIS_URL` if different) to scale
-the service horizontally behind a load balancer.
+the service horizontally behind a load balancer. In this document, a *replica*
+means any independent app instance (container, process, pod, VM, etc.) running
+`fastapi_chat.py` behind the balancer; Redis keeps them in sync so they can all
+serve the same rooms.
 
 Clients can page through durable history via:
 
