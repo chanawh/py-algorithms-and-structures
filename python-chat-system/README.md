@@ -123,13 +123,14 @@ port at a time. Pick one of these approaches:
 ### Optional: Run the FastAPI WebSocket + HTTP API (stateless & containerized)
 
 This service uses FastAPI with Redis pub/sub so multiple app instances can stay
-in sync without keeping per-room state in-memory. It exposes:
+in sync without keeping per-room state in-memory, and PostgreSQL for durable
+message history and metadata. It exposes:
 
 - `POST /api/send` – publish a chat message to a room.
 - `GET /health` – health check.
 - `WS /ws/{room}/{username}` – WebSocket endpoint for bi-directional chat.
 
-#### Local run (needs Redis)
+#### Local run (needs Redis + PostgreSQL)
 
 Start Redis (Docker example):
 
@@ -137,21 +138,37 @@ Start Redis (Docker example):
 docker run -p 6379:6379 --name chat-redis -d redis:7-alpine
 ```
 
-Install deps and launch the FastAPI service:
+Start PostgreSQL (Docker example):
+
+```bash
+docker run -p 5432:5432 --name chat-postgres -e POSTGRES_USER=chatuser -e POSTGRES_PASSWORD=chatpass -e POSTGRES_DB=chatdb -d postgres:16-alpine
+```
+
+Install deps and launch the FastAPI service (it will auto-create the
+`chat_messages` table on startup):
 
 ```bash
 pip install -r requirements.txt
+export REDIS_URL=redis://localhost:6379/0
+export DATABASE_URL=postgresql://chatuser:chatpass@localhost:5432/chatdb
 uvicorn fastapi_chat:app --host 0.0.0.0 --port 8000
 ```
 
 Use the same Redis URL in all replicas (set `REDIS_URL` if different) to scale
 the service horizontally behind a load balancer.
 
+Clients can page through durable history via:
+
+- `GET /api/history?room=<room>&limit=50&before_id=<id>`
+
 #### Docker run
 
 ```bash
 docker build -t mini-zoom-fastapi .
-docker run -p 8000:8000 -e REDIS_URL=redis://host.docker.internal:6379/0 mini-zoom-fastapi
+docker run -p 8000:8000 \ \
+  -e REDIS_URL=redis://host.docker.internal:6379/0 \ \
+  -e DATABASE_URL=postgresql://chatuser:chatpass@host.docker.internal:5432/chatdb \ \
+  mini-zoom-fastapi
 ```
 
 #### Quick WebSocket test
