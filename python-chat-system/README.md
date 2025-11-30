@@ -22,6 +22,9 @@ No frameworks, no databases, no external deps.
 
 There's also a tiny web UI if you prefer a browser-based chat.
 
+And a FastAPI + WebSocket service that is stateless and ready for container
+deployments.
+
 ---
 
 ## Requirements
@@ -116,6 +119,51 @@ port at a time. Pick one of these approaches:
    processes cannot safely share the same port without an external proxy that
    understands both protocols, so a combined server is the simplest way to
    serve both the browser UI and chat API on one address.
+
+### Optional: Run the FastAPI WebSocket + HTTP API (stateless & containerized)
+
+This service uses FastAPI with Redis pub/sub so multiple app instances can stay
+in sync without keeping per-room state in-memory. It exposes:
+
+- `POST /api/send` – publish a chat message to a room.
+- `GET /health` – health check.
+- `WS /ws/{room}/{username}` – WebSocket endpoint for bi-directional chat.
+
+#### Local run (needs Redis)
+
+Start Redis (Docker example):
+
+```bash
+docker run -p 6379:6379 --name chat-redis -d redis:7-alpine
+```
+
+Install deps and launch the FastAPI service:
+
+```bash
+pip install -r requirements.txt
+uvicorn fastapi_chat:app --host 0.0.0.0 --port 8000
+```
+
+Use the same Redis URL in all replicas (set `REDIS_URL` if different) to scale
+the service horizontally behind a load balancer.
+
+#### Docker run
+
+```bash
+docker build -t mini-zoom-fastapi .
+docker run -p 8000:8000 -e REDIS_URL=redis://host.docker.internal:6379/0 mini-zoom-fastapi
+```
+
+#### Quick WebSocket test
+
+```bash
+websocat ws://localhost:8000/ws/lobby/alice
+# In another shell:
+websocat ws://localhost:8000/ws/lobby/bob
+```
+
+Messages flow through Redis, so both shells (and any additional app replicas)
+share the same rooms without sticky sessions or local memory.
 
 ---
 
