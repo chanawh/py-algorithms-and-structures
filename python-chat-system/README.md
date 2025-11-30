@@ -182,6 +182,33 @@ websocat ws://localhost:8000/ws/lobby/bob
 Messages flow through Redis, so both shells (and any additional app replicas)
 share the same rooms without sticky sessions or local memory.
 
+#### How fan-out works (Redis pub/sub)
+
+Redis pub/sub is used so every app instance hears the same room events without
+keeping per-room state in-process:
+
+1. **Sender → API:** a client sends a chat message via `POST /api/send` or over
+   the WebSocket route `WS /ws/{room}/{username}`.
+2. **API → Redis:** the API records the message in PostgreSQL for durability and
+   publishes a JSON payload to `chat-room:<room>` using `PUBLISH`.
+3. **Redis → all replicas:** every running FastAPI instance has a `SUBSCRIBE` to
+   that `chat-room:<room>` channel. Redis fan-outs the payload to all of them,
+   so no single process is a bottleneck.
+4. **Replica → clients:** each replica forwards the payload to its connected
+   WebSocket clients for that room. Clients on different app instances still
+   see the same stream because Redis delivered the same message to every
+   subscriber.
+
+Examples:
+
+- If **Alice** posts in `lobby` via `POST /api/send`, the process that handled
+  the request publishes `{"username": "alice", "text": "hi", ...}` to
+  `chat-room:lobby`; every replica receives it and forwards it to its own
+  WebSocket connections in `lobby`.
+- If **Bob** is connected to replica A and **Cara** to replica B, and Alice’s
+  message hits replica C, Redis delivers the payload to A, B, and C so Bob and
+  Cara both see Alice’s chat immediately without sticky sessions.
+
 ---
 
 ## Client Commands
