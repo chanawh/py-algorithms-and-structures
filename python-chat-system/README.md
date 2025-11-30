@@ -220,6 +220,60 @@ etc.) that owns the public port and forwards traffic to each replica.
   Configure health checks to hit `/health` so unhealthy pods are removed from
   rotation.
 
+##### Deploying to AWS EKS (step-by-step)
+
+1) **Build and push the image to ECR**
+
+   ```bash
+   aws ecr create-repository --repository-name mini-zoom-chat
+   aws ecr get-login-password --region <region> | \
+     docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.<region>.amazonaws.com
+   docker build -t <aws_account_id>.dkr.ecr.<region>.amazonaws.com/mini-zoom-chat:latest .
+   docker push <aws_account_id>.dkr.ecr.<region>.amazonaws.com/mini-zoom-chat:latest
+   ```
+
+2) **Provision dependencies** (managed services are recommended):
+
+   - **Redis**: Amazon ElastiCache (or Amazon MemoryDB) endpoint, e.g.,
+     `rediss://your-cache.abcxyz.ng.0001.use1.cache.amazonaws.com:6379/0`.
+   - **PostgreSQL**: Amazon RDS endpoint, e.g.,
+     `postgresql://chatuser:chatpass@your-rds-endpoint:5432/chatdb`.
+
+3) **Create the secret with connection strings**
+
+   ```bash
+   kubectl create namespace chat
+   kubectl -n chat create secret generic chat-env \
+     --from-literal=REDIS_URL="<your_redis_url>" \
+     --from-literal=DATABASE_URL="<your_postgres_url>"
+   ```
+
+4) **Install an ingress controller** (one of):
+
+   - **AWS Load Balancer Controller** (preferred for ALB): follow
+     <https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/>.
+   - **Nginx Ingress Controller**: e.g., `helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace`.
+
+5) **Apply the provided manifests**
+
+   Update `deploy/k8s/fastapi-chat.yaml` with your ECR image, domain, and ACM
+   certificate ARN, then apply:
+
+   ```bash
+   kubectl apply -f deploy/k8s/fastapi-chat.yaml
+   ```
+
+   The manifest creates a `Deployment`, `Service`, and `Ingress` in the `chat`
+   namespace. The ingress is configured for ALB with WebSocket-friendly settings
+   (HTTP/2 + `/health` checks). Swap annotations if you use Nginx instead.
+
+6) **Test**
+
+   Once the ingress has provisioned, visit `https://<your-chat-domain>` and
+   connect via WebSocket (e.g., `wss://<your-chat-domain>/ws/lobby/alice`) or
+   send HTTP requests to `/api/send` and `/api/history`. All pods share Redis so
+   chat rooms stay consistent across replicas and regions.
+
 Clients can page through durable history via:
 
 - `GET /api/history?room=<room>&limit=50&before_id=<id>`
