@@ -88,6 +88,12 @@ Notes for the browser UI:
   process** can bind to that port at a time. If you start `mini_zoom_chat.py`
   twice on `:5000`, the second process will fail with “address already in use”
   whether you’re local, in VS Code, or in Codespaces.
+- If it ever looks like two shells are “both running” `mini_zoom_chat.py` on
+  the same port locally, one of them either exited (e.g., after a `Ctrl+C`) or
+  failed to bind and printed the port-in-use error. The active clients are all
+  hitting the single process that successfully owns the port. You can confirm
+  the owner with `lsof -i :8000` (macOS/Linux) if you’re unsure which shell is
+  the real server.
 
 #### Reusing port 5000 for the web UI
 
