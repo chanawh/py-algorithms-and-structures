@@ -25,6 +25,114 @@ There's also a tiny web UI if you prefer a browser-based chat.
 And a FastAPI + WebSocket service that is stateless and ready for container
 deployments.
 
+## Minimal MVP (FastAPI + Redis + PostgreSQL)
+
+1. **Clients**
+   - Simple web UI ("Mini Zoom Chat") served from `/` that uses WebSockets.
+   - Long-polling browser UI in `mini_zoom_chat.py` if you want a pure stdlib option.
+2. **API & WebSocket Service**
+   - Chat service written in Python (FastAPI), containerized with Docker.
+   - Stateless; scales horizontally.
+3. **Data layer**
+   - Redis for real-time message fan-out / presence.
+   - PostgreSQL (AWS RDS friendly) for durable message history and metadata.
+
+### Quick start: run the full stack locally
+
+> **Tip:** run these commands from the `python-chat-system/` directory (where
+> the `Dockerfile` and `docker-compose.yml` live). Running `docker-compose` from
+> elsewhere will fail with `open Dockerfile: no such file or directory`.
+
+The FastAPI/WebSocket service already has a `Dockerfile` in the repo; you don't
+need to create another one. The `docker-compose.yml` builds from it by default
+so you can run everything with a single command:
+
+```bash
+docker-compose up --build
+```
+
+Then open [http://localhost:8000](http://localhost:8000) to use the minimal WebSocket UI.
+
+- Enter a username and room, click **Join room**, and start chatting.
+- Every message is fanned out via Redis to all connected app replicas, and persisted to PostgreSQL.
+- You can also hit the HTTP history endpoint: `curl "http://localhost:8000/api/history?room=lobby"`.
+
+### End-to-end local scenario (two users chatting)
+
+This flow shows the stack running locally (FastAPI + Redis + PostgreSQL) with two browser tabs in the same room.
+
+1) **Start the stack**
+
+```bash
+docker-compose up --build
+```
+
+> Tip: if you already pulled the images and only need code changes to rebuild the app layer, use `docker-compose up --build --no-deps fastapi`.
+
+2) **Open the WebSocket UI**
+
+- Navigate to [http://localhost:8000](http://localhost:8000).
+- In Tab A, enter `alice` as the username and `lobby` as the room, then click **Join room**.
+- In Tab B, open another window to the same URL, enter `bob` as the username and the same room (`lobby`), then click **Join room**.
+
+3) **Chat and observe fan-out + persistence**
+
+- From Tab A, send "Hello from Alice"; it should immediately appear in both tabs.
+- From Tab B, reply with "Hi Alice, this is Bob"; again, both tabs receive it instantly.
+- The WebSocket events are broadcast via Redis, and each message is written to PostgreSQL for history.
+
+4) **Verify message history via HTTP**
+
+In a separate shell:
+
+```bash
+curl "http://localhost:8000/api/history?room=lobby" | jq .
+```
+
+You should see both messages with timestamps and usernames. Stop the stack with `Ctrl+C` in the compose terminal when done.
+
+### Viewing PostgreSQL locally (compose services)
+
+You can inspect the stored chat history directly from the PostgreSQL container that ships with `docker-compose`.
+
+1) **Open a psql shell inside the DB container**
+
+```bash
+docker-compose exec db psql -U chatuser -d chatdb
+```
+
+2) **Run a quick query**
+
+```sql
+SELECT room, username, text, type, ts
+FROM chat_messages
+ORDER BY id DESC
+LIMIT 20;
+```
+
+3) **Exit**
+
+```sql
+\q
+```
+
+If you prefer connecting from a local `psql` client, the compose stack exposes PostgreSQL on `localhost:5432` using the same
+credentials: `chatuser` / `chatpass`, database `chatdb`.
+
+## Architecture (aligns to common system-design answers)
+
+1. **Clients**
+   - Minimal browser UI (`mini_zoom_chat.py`) that can speak WebSockets or long-poll via HTTP.
+   - Terminal client (`chat_client.py`) that uses the raw TCP protocol from `chat_server.py`.
+
+2. **API & WebSocket service**
+   - FastAPI app in `fastapi_chat.py`, with both HTTP endpoints and WebSocket routes.
+   - Containerized via `Dockerfile`; stateless so it scales horizontally (multiple replicas subscribe to Redis for the same rooms).
+
+3. **Data layer**
+   - **Redis**: pub/sub fan-out and presence; every app instance subscribes to `chat-room:<room>` channels for real-time delivery.
+   - **PostgreSQL**: durable message history/metadata; `record_message` writes every event, and `/api/history` reads it back.
+
 ---
 
 ## Requirements
