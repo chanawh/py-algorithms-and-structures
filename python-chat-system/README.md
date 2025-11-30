@@ -167,6 +167,36 @@ PaaS router. The balancer handles health checks and typically round-robins
 requests, while Redis keeps every replica’s room stream consistent so users see
 the same chat regardless of which instance they hit.
 
+**How it’s implemented here:** The repository doesn’t ship a load balancer;
+you supply one in your environment. Run multiple `fastapi_chat.py` instances
+and front them with your chosen balancer. For example, with Nginx you could
+define an upstream to your app replicas and proxy both HTTP and WebSocket
+traffic to them:
+
+```
+upstream chat_api {
+    server app1:8000;
+    server app2:8000;
+}
+
+server {
+    listen 80;
+    location /ws/ {
+        proxy_pass http://chat_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+    }
+    location / {
+        proxy_pass http://chat_api;
+    }
+}
+```
+
+Any equivalent layer-7 load balancer (cloud-managed, ingress controller, or
+reverse proxy) works the same way: it owns the public endpoint, distributes
+incoming requests to your replicas, and Redis keeps each instance in sync.
+
 Clients can page through durable history via:
 
 - `GET /api/history?room=<room>&limit=50&before_id=<id>`
