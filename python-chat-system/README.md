@@ -20,6 +20,8 @@ It’s intentionally simple to match “system design a chat app” concepts wit
 
 No frameworks, no databases, no external deps.
 
+There's also a tiny web UI if you prefer a browser-based chat.
+
 ---
 
 ## Requirements
@@ -63,6 +65,39 @@ You’ll be asked for:
 - `room` (e.g. `lobby`)
 
 Open more terminals and run more clients to simulate multiple users.
+
+### Optional: Run the "Mini Zoom Chat" web UI (long-polling)
+
+```bash
+python mini_zoom_chat.py --port 8000
+```
+
+Then open [http://localhost:8000](http://localhost:8000) in your browser,
+enter a username/room, and chat via the simple web interface using
+long-polling requests. It defaults to port `8000` because the socket-based
+`chat_server.py` already listens on `5000`.
+
+#### Reusing port 5000 for the web UI
+
+You can run the browser UI on `:5000`, but only **one** server can own that
+port at a time. Pick one of these approaches:
+
+1. **Switch entirely to the HTTP UI:**
+
+   ```bash
+   # stop any running chat_server.py process first
+   python mini_zoom_chat.py --port 5000
+   ```
+
+   This runs the long-polling HTTP server (and its in-memory rooms) on the
+   same address the TCP server normally uses.
+
+2. **Combine everything under a single HTTP entrypoint:** refactor
+   `chat_server.py` to expose HTTP endpoints (or import its room storage into
+   `mini_zoom_chat.py`) and run just one HTTP server on `:5000`. Two separate
+   processes cannot safely share the same port without an external proxy that
+   understands both protocols, so a combined server is the simplest way to
+   serve both the browser UI and chat API on one address.
 
 ---
 
