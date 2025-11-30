@@ -204,6 +204,22 @@ balancer. To scale out, start multiple app instances and place them behind an
 external layer-7 balancer (cloud LB, ingress controller, Nginx/HAProxy/Envoy,
 etc.) that owns the public port and forwards traffic to each replica.
 
+#### Kubernetes / AWS EKS example (multi-region with HTTPS ingress)
+
+- **Primary cluster in Region A (e.g., `us-east-1`)** runs your `fastapi_chat.py`
+  replicas as a Deployment, fronted by a Service (type `ClusterIP`) and an
+  ingress controller (AWS ALB Ingress Controller / AWS Load Balancer Controller
+  or Nginx Ingress) that terminates HTTPS and load balances to the pods.
+- **Secondary cluster in Region B (e.g., `us-west-2`)** mirrors the setup for
+  disaster recovery. Keep the same Redis/PostgreSQL connection strings or point
+  to region-specific managed services, and use DNS failover (e.g., Route 53)
+  to shift traffic if Region A is unavailable.
+- **Ingress controller:** either ALB/ELB via the AWS Load Balancer Controller or
+  an in-cluster Nginx ingress exposes `https://` endpoints and handles WebSocket
+  upgrades for `/ws/...` while proxying `POST /api/send` and `GET /api/history`.
+  Configure health checks to hit `/health` so unhealthy pods are removed from
+  rotation.
+
 Clients can page through durable history via:
 
 - `GET /api/history?room=<room>&limit=50&before_id=<id>`
