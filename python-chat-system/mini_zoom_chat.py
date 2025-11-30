@@ -7,8 +7,8 @@ Open http://localhost:8000 in your browser, choose a username/room, and chat.
 """
 
 import argparse
-import json
 import itertools
+import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -166,6 +166,8 @@ async function pollLoop() {
 rooms = {}
 rooms_lock = threading.Lock()
 message_ids = itertools.count(1)
+# Keep room history bounded to prevent unbounded memory growth if a room stays active.
+MAX_MESSAGES_PER_ROOM = 500
 
 
 def get_room(room: str):
@@ -187,6 +189,8 @@ def append_message(room: str, username: str, text: str, msg_type: str = "chat"):
     }
     with room_data["cond"]:
         room_data["messages"].append(message)
+        if len(room_data["messages"]) > MAX_MESSAGES_PER_ROOM:
+            room_data["messages"] = room_data["messages"][-MAX_MESSAGES_PER_ROOM:]
         room_data["cond"].notify_all()
     return message
 

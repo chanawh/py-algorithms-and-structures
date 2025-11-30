@@ -77,6 +77,13 @@ enter a username/room, and chat via the simple web interface using
 long-polling requests. It defaults to port `8000` because the socket-based
 `chat_server.py` already listens on `5000`.
 
+Notes for the browser UI:
+
+- Each room keeps only the latest 500 messages in memory to avoid unbounded
+  growth if a room stays busy for a long time.
+- The long-polling endpoints are served directly by `mini_zoom_chat.py`; they
+  do not reuse the TCP socket protocol from `chat_server.py`.
+
 #### Reusing port 5000 for the web UI
 
 You can run the browser UI on `:5000`, but only **one** server can own that
